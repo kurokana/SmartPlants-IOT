@@ -12,11 +12,38 @@ class DashboardController extends Controller
     public function index()
     {
         $devices = Device::withCount('sensors')->orderBy('name')->get();
+        
+        // Update status berdasarkan last_seen (jika > 5 menit = offline)
+        foreach ($devices as $device) {
+            if ($device->last_seen) {
+                $isOnline = $device->last_seen->diffInMinutes(now()) < 5;
+                if ($device->status !== ($isOnline ? 'online' : 'offline')) {
+                    $device->update(['status' => $isOnline ? 'online' : 'offline']);
+                    $device->refresh(); // Reload dari database
+                }
+            } else {
+                // Jika belum pernah kirim data
+                if ($device->status !== 'offline') {
+                    $device->update(['status' => 'offline']);
+                    $device->refresh(); // Reload dari database
+                }
+            }
+        }
+        
         return view('dashboard.index', compact('devices'));
     }
 
     public function device(Device $device)
     {
+        // Update status real-time
+        if ($device->last_seen) {
+            $isOnline = $device->last_seen->diffInMinutes(now()) < 5;
+            if ($device->status !== ($isOnline ? 'online' : 'offline')) {
+                $device->update(['status' => $isOnline ? 'online' : 'offline']);
+                $device->refresh(); // Reload dari database
+            }
+        }
+        
         $device->load(['sensors' => function($q){
             $q->with(['readings' => function($qq){
                 $qq->orderBy('recorded_at','desc')->limit(50);

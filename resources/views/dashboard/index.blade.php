@@ -87,7 +87,7 @@
                                     <div>
                                         {{-- Judul perangkat kini menggunakan warna primer --}}
                                         <h4 class="font-semibold text-lg text-primary-600">{{ $device->name }}</h4>
-                                        <p class="text-sm text-gray-600">ID: {{ $device->device_id }}</p>
+                                        <p class="text-sm text-gray-600">ID: {{ $device->id }}</p>
                                     </div>
                                     <div class="flex items-center space-x-2">
                                         <span class="font-medium text-sm {{ $device->is_online ? 'text-green-500' : 'text-red-500' }}">
