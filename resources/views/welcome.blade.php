@@ -1,12 +1,3 @@
-{{--
-|--------------------------------------------------------------------------
-| File: resources/views/welcome.blade.php
-|--------------------------------------------------------------------------
-|
-| Ini adalah LANDING PAGE (Pengantar) untuk tamu.
-| PERBAIKAN UTAMA: Penambahan @vite di <head> untuk memuat Tailwind CSS.
-|
---}}
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
     <head>
@@ -18,44 +9,38 @@
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=figtree:400,600&display=swap" rel="stylesheet" />
 
-        {{-- 
-        |--------------------------------------------------------------------------
-        | INI PERBAIKAN PENTING!
-        |--------------------------------------------------------------------------
-        |
-        | @vite memanggil CSS (Tailwind) dan JS. Tanpa ini, halaman akan putih.
-        |
-        --}}
+        {{-- Memanggil CSS (Tailwind) dan JS via Vite --}}
         @vite(['resources/css/app.css', 'resources/js/app.js'])
 
     </head>
-    <body class="font-sans antialiased bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
+    {{-- PERUBAHAN: bg-white dan hapus text-gray-800 --}}
+    <body class="font-sans antialiased bg-white">
         
         <div class="min-h-screen flex flex-col">
             
-            <nav class="bg-white dark:bg-gray-800 shadow-md sticky top-0 z-50">
+            {{-- PERUBAHAN: Hapus shadow-md, ganti border-b --}}
+            <nav class="bg-white border-b border-gray-100 sticky top-0 z-50">
                 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div class="flex justify-between h-16">
                         
                         <div class="flex items-center">
-                            <span class="font-bold text-xl text-green-600">🌱 Smart Plants</span>
+                            {{-- PERUBAHAN: Hapus dark:text-primary-500 --}}
+                            <span class="font-bold text-xl text-primary-600">Smart Plants</span>
                         </div>
                         
                         <div class="flex items-center">
                             @if (Route::has('login'))
                                 <div class="space-x-4">
-                                    {{-- 
-                                     | Logika Cerdas:
-                                     | Jika sudah login (@auth), tombol mengarah ke '/dashboard'.
-                                     | Jika masih tamu (@else), tombol mengarah ke '/login'.
-                                    --}}
                                     @auth
-                                        <a href="{{ url('/dashboard') }}" class="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-green-600">Dashboard</a>
+                                        {{-- PERUBAHAN: Hapus dark: class --}}
+                                        <a href="{{ url('/dashboard') }}" class="text-sm font-medium text-gray-700 hover:text-primary-600">Dashboard</a>
                                     @else
-                                        <a href="{{ route('login') }}" class="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-green-600">Log in</a>
+                                        {{-- PERUBAHAN: Hapus dark: class --}}
+                                        <a href="{{ route('login') }}" class="text-sm font-medium text-gray-700 hover:text-primary-600">Log in</a>
 
                                         @if (Route::has('register'))
-                                            <a href="{{ route('register') }}" class="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-green-600">Register</a>
+                                            {{-- PERUBAHAN: Hapus dark: class --}}
+                                            <a href="{{ route('register') }}" class="text-sm font-medium text-gray-700 hover:text-primary-600">Register</a>
                                         @endif
                                     @endauth
                                 </div>
@@ -68,27 +53,29 @@
             <main class="flex-grow">
                 <div class="max-w-7xl mx-auto py-16 px-4 sm:px-6 lg:px-8 text-center">
                     
-                    <h1 class="text-4xl md:text-5xl font-extrabold text-gray-900 dark:text-white">
+                    {{-- PERUBAHAN: Hapus dark:text-white --}}
+                    <h1 class="text-4xl md:text-5xl font-extrabold text-gray-900">
                         Monitor Tanamanmu, di Mana Saja.
                     </h1>
                     
-                    <p class="mt-4 text-lg md:text-xl text-gray-600 dark:text-gray-400">
+                    {{-- PERUBAHAN: Hapus dark:text-gray-400 --}}
+                    <p class="mt-4 text-lg md:text-xl text-gray-600">
                         Sistem IoT kami membantumu memantau suhu, kelembapan, dan kesehatan tanaman secara real-time.
                     </p>
                     
                     <div class="mt-8">
-                        {{-- Tombol ini akan mengarahkan ke login jika belum login,
-                             atau langsung ke dashboard jika sudah login --}}
+                        {{-- Tombol ini sudah benar menggunakan warna primary --}}
                         <a href="{{ route('dashboard') }}" 
-                           class="inline-block bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-lg text-lg shadow-lg transition duration-300">
+                           class="inline-block bg-primary-600 hover:bg-primary-700 text-black font-bold py-3 px-8 rounded-lg text-lg shadow-lg transition duration-300">
                             Mulai Monitoring
                         </a>
                     </div>
                 </div>
             </main>
 
-            <footer class="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
-                <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8 text-center text-gray-500 dark:text-gray-400 text-sm">
+            {{-- PERUBAHAN: Hapus dark: class, ganti border-gray-100 --}}
+            <footer class="bg-white border-t border-gray-100">
+                <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8 text-center text-gray-500 text-sm">
                     &copy; {{ date('Y') }} Tim Smart Plants.
                 </div>
             </footer>

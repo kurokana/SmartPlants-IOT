@@ -1,3 +1,13 @@
+{{--
+|--------------------------------------------------------------------------
+| File: resources/views/layouts/app.blade.php
+|--------------------------------------------------------------------------
+|
+| PERUBAHAN TEMA "CERAH":
+| 1. Mengganti background body ke 'bg-white' (Putih Bersih).
+| 2. Menghapus SEMUA class 'dark:' untuk memaksa TEMA CERAH.
+|
+--}}
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
     <head>
@@ -7,27 +17,27 @@
 
         <title>{{ config('app.name', 'Laravel') }}</title>
 
-        <!-- Fonts -->
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
 
-        <!-- Scripts -->
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
     <body class="font-sans antialiased">
-        <div class="min-h-screen bg-gray-100">
+        {{-- Latar belakang 'bg-white' untuk tema cerah maksimal --}}
+        <div class="min-h-screen bg-white">
+            
+            {{-- Memuat Navigasi (yang juga akan kita perbaiki) --}}
             @include('layouts.navigation')
 
-            <!-- Page Heading -->
-            @isset($header)
-                <header class="bg-white shadow">
+            @if (isset($header))
+                {{-- Header tetap 'bg-white' tapi dengan border bawah --}}
+                <header class="bg-white border-b border-gray-100">
                     <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
                         {{ $header }}
                     </div>
                 </header>
-            @endisset
+            @endif
 
-            <!-- Page Content -->
             <main>
                 {{ $slot }}
             </main>
