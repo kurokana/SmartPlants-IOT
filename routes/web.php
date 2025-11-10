@@ -43,6 +43,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Rute kustom milikmu untuk melihat detail device
     Route::get('/dashboard/device/{device}', [DashboardController::class, 'device'])
         ->name('device.show');
+    
+    // Rute untuk water command
+    Route::post('/devices/{device}/commands/water-on', [DashboardController::class, 'waterOn'])
+        ->name('device.water');
 
     // RUTE PROVISIONING (MILIKMU)
     // Rute ini tetap sama dan TIDAK DIUBAH, hanya dipindah ke dalam grup.

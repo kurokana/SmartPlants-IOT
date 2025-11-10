@@ -1,88 +1,282 @@
 <x-app-layout>
-  <div class="p-6">
-    @if (session('status'))
-      <div class="mb-4 p-3 bg-green-100 text-green-800 rounded">{{ session('status') }}</div>
-    @endif
-
-    <h1 class="text-2xl font-bold mb-1">{{ $device->name }}</h1>
-    <div class="text-sm text-gray-500 mb-6">{{ $device->id }} — {{ $device->location }}</div>
-
-    <div class="grid md:grid-cols-3 gap-4 mb-6">
-      <div class="p-4 border rounded">
-        <div class="text-sm text-gray-500">Green Index</div>
-        <div class="text-2xl font-semibold">
-          {{ $analytics['green_index'] !== null ? $analytics['green_index'] : '-' }}
+  <div class="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      
+      @if (session('status'))
+        <div class="mb-6 p-4 bg-green-50 border border-green-200 text-green-800 rounded-xl flex items-start">
+          <svg class="w-5 h-5 mr-3 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+          </svg>
+          <span class="text-sm">{{ session('status') }}</span>
         </div>
-        <div class="text-xs text-gray-500">Rumus: G / (R+G+B)</div>
-      </div>
-      <div class="p-4 border rounded">
-        <div class="text-sm text-gray-500">Alerts</div>
-        @if (count($analytics['alerts']))
-          <ul class="list-disc pl-5 text-sm">
-            @foreach ($analytics['alerts'] as $a)
-              <li>{{ $a }}</li>
-            @endforeach
-          </ul>
-        @else
-          <div class="text-sm text-gray-500">Tidak ada alert.</div>
-        @endif
-      </div>
-      <div class="p-4 border rounded">
-        <div class="text-sm text-gray-500">Auto Action</div>
-        <form method="POST" action="{{ url('/devices/'.$device->id.'/commands/water-on') }}" class="flex items-center gap-2">
-          @csrf
-          <input type="number" name="duration_sec" value="5" class="border rounded px-2 py-1 w-20">
-          <button class="px-3 py-1 border rounded hover:bg-gray-50">Water On</button>
-        </form>
-      </div>
-    </div>
+      @endif
 
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+      <!-- Header -->
+      <div class="mb-8" id="device-header">
+        <div class="flex items-center justify-between">
+          <div>
+            <a href="{{ route('dashboard') }}" class="text-sm text-gray-500 hover:text-gray-700 mb-2 inline-flex items-center">
+              <svg class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+              </svg>
+              Kembali ke Dashboard
+            </a>
+            <h1 class="text-3xl font-bold text-gray-900 mt-2">{{ $device->name }}</h1>
+            <p class="text-sm text-gray-500 mt-1">{{ $device->location }} • ID: {{ $device->id }}</p>
+          </div>
+          <span id="status-badge" class="inline-flex items-center px-4 py-2 rounded-xl text-sm font-medium {{ $device->is_online ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600' }}">
+            <span class="w-2 h-2 rounded-full mr-2 {{ $device->is_online ? 'bg-green-500' : 'bg-gray-400' }}"></span>
+            {{ $device->is_online ? 'Online' : 'Offline' }}
+          </span>
+        </div>
+      </div>
 
-    <div class="grid md:grid-cols-2 gap-6">
-      @foreach($device->sensors as $s)
-      <div class="p-4 border rounded">
-        <div class="font-semibold mb-2">{{ $s->label ?? strtoupper($s->type) }} ({{ $s->unit }})</div>
-        <canvas id="chart-{{ $s->id }}" height="120"></canvas>
-        @php
-          $points = $s->readings->reverse();
-          $labels = $points->pluck('recorded_at')->map(fn($d)=>$d->format('H:i'))->values();
-          $values = $points->pluck('value')->values();
-        @endphp
-        <script>
-          const ctx{{ $s->id }} = document.getElementById('chart-{{ $s->id }}');
-          const data{{ $s->id }} = {
-            labels: {!! $labels->toJson() !!},
-            datasets: [{ label: '{{ $s->type }}', data: {!! $values->toJson() !!} }]
-          };
-          const chart{{ $s->id }} = new Chart(ctx{{ $s->id }}, { type: 'line', data: data{{ $s->id }} });
+      <!-- Quick Stats -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8" id="quick-stats">
+        <div class="bg-white rounded-2xl p-6 shadow-sm">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-sm font-medium text-gray-500">Green Index</h3>
+            <div class="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
+              <svg class="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+              </svg>
+            </div>
+          </div>
+          <p id="green-index" class="text-3xl font-bold text-gray-900">{{ $analytics['green_index'] !== null ? $analytics['green_index'] : '-' }}</p>
+          <p class="text-xs text-gray-500 mt-1">G / (R+G+B)</p>
+        </div>
 
-          // polling 10 detik untuk update titik terakhir
-          setInterval(async () => {
-            const res = await fetch('{{ url('/api/sensor-latest?sensor_id='.$s->id) }}');
-            if (!res.ok) return;
-            const j = await res.json();
-            if (j && j.value !== undefined) {
-              data{{ $s->id }}.labels.push(j.time);
-              data{{ $s->id }}.datasets[0].data.push(j.value);
-              if (data{{ $s->id }}.labels.length > 100) {
-                data{{ $s->id }}.labels.shift();
-                data{{ $s->id }}.datasets[0].data.shift();
+        <div class="bg-white rounded-2xl p-6 shadow-sm">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-sm font-medium text-gray-500">Alerts</h3>
+            <div class="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
+              <svg class="w-5 h-5 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+          </div>
+          <div id="alerts-container">
+            @if (count($analytics['alerts']))
+              <div class="space-y-1 mt-3">
+                @foreach ($analytics['alerts'] as $a)
+                  <div class="text-sm text-orange-700 bg-orange-50 px-3 py-1.5 rounded-lg">{{ $a }}</div>
+                @endforeach
+              </div>
+            @else
+              <p class="text-sm text-gray-500 mt-3">Tidak ada peringatan</p>
+            @endif
+          </div>
+        </div>
+
+        <div class="bg-white rounded-2xl p-6 shadow-sm">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-sm font-medium text-gray-500">Auto Water</h3>
+            <div class="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+              <svg class="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+              </svg>
+            </div>
+          </div>
+          <form id="water-form" method="POST" action="{{ route('device.water', $device->id) }}" class="mt-3 flex items-center gap-2">
+            @csrf
+            <input type="number" name="duration_sec" value="5" min="1" max="60"
+                   class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent text-sm" 
+                   placeholder="Detik">
+            <button type="submit" id="water-btn" class="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed">
+              Aktifkan
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+      <!-- Sensor Charts -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        @foreach($device->sensors as $s)
+        <div class="bg-white rounded-2xl p-6 shadow-sm">
+          <h3 class="text-lg font-semibold text-gray-900 mb-4">{{ $s->label ?? strtoupper($s->type) }}</h3>
+          
+          <div class="mb-4">
+            <canvas id="chart-{{ $s->id }}" height="200"></canvas>
+          </div>
+
+          @php
+            $points = $s->readings->reverse();
+            $labels = $points->pluck('recorded_at')->map(fn($d)=>$d->format('H:i'))->values();
+            $values = $points->pluck('value')->values();
+            $m = $analytics['metrics'][$s->type] ?? null;
+          @endphp
+          
+          <script>
+            const ctx{{ $s->id }} = document.getElementById('chart-{{ $s->id }}');
+            const data{{ $s->id }} = {
+              labels: {!! $labels->toJson() !!},
+              datasets: [{
+                label: '{{ $s->label }}',
+                data: {!! $values->toJson() !!},
+                borderColor: 'rgb(17, 24, 39)',
+                backgroundColor: 'rgba(17, 24, 39, 0.1)',
+                tension: 0.4,
+                fill: true
+              }]
+            };
+            const chart{{ $s->id }} = new Chart(ctx{{ $s->id }}, {
+              type: 'line',
+              data: data{{ $s->id }},
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: { display: false }
+                },
+                scales: {
+                  y: { beginAtZero: false }
+                }
               }
-              chart{{ $s->id }}.update();
-            }
-          }, 10000);
-        </script>
+            });
 
-        @php
-          $m = $analytics['metrics'][$s->type] ?? null;
-        @endphp
-        <div class="mt-3 text-sm text-gray-700">
-          <div>Last: <b>{{ $m['last'] ?? '-' }}</b> @ {{ isset($m['last_at']) ? \Carbon\Carbon::parse($m['last_at'])->format('H:i') : '-' }}</div>
-          <div>Min/Avg/Max (24h): {{ $m['min'] ?? '-' }} / {{ $m['avg'] ?? '-' }} / {{ $m['max'] ?? '-' }}</div>
+            setInterval(async () => {
+              const res = await fetch('{{ url('/api/sensor-latest?sensor_id='.$s->id) }}');
+              if (!res.ok) return;
+              const j = await res.json();
+              if (j && j.value !== undefined) {
+                data{{ $s->id }}.labels.push(j.time);
+                data{{ $s->id }}.datasets[0].data.push(j.value);
+                if (data{{ $s->id }}.labels.length > 50) {
+                  data{{ $s->id }}.labels.shift();
+                  data{{ $s->id }}.datasets[0].data.shift();
+                }
+                chart{{ $s->id }}.update();
+              }
+            }, 10000);
+          </script>
+
+          <div class="grid grid-cols-2 gap-4 pt-4 border-t border-gray-100">
+            <div>
+              <p class="text-xs text-gray-500">Terakhir</p>
+              <p class="text-lg font-semibold text-gray-900" id="last-{{ $s->id }}">{{ $m['last'] ?? '-' }} <span class="text-sm font-normal text-gray-500">{{ $s->unit }}</span></p>
+              <p class="text-xs text-gray-500" id="last-time-{{ $s->id }}">{{ isset($m['last_at']) ? \Carbon\Carbon::parse($m['last_at'])->format('H:i') : '-' }}</p>
+            </div>
+            <div>
+              <p class="text-xs text-gray-500">Rata-rata 24j</p>
+              <p class="text-lg font-semibold text-gray-900" id="avg-{{ $s->id }}">{{ $m['avg'] ?? '-' }} <span class="text-sm font-normal text-gray-500">{{ $s->unit }}</span></p>
+              <p class="text-xs text-gray-500" id="minmax-{{ $s->id }}">Min: {{ $m['min'] ?? '-' }} • Max: {{ $m['max'] ?? '-' }}</p>
+            </div>
+          </div>
         </div>
+        @endforeach
       </div>
-      @endforeach
+
+      <script>
+        // Auto refresh untuk update status dan analytics saat data baru masuk
+        let lastUpdateTime = Date.now();
+        const deviceId = '{{ $device->id }}';
+        
+        // Handle water form submission
+        document.getElementById('water-form').addEventListener('submit', async function(e) {
+          e.preventDefault();
+          const btn = document.getElementById('water-btn');
+          const form = e.target;
+          const formData = new FormData(form);
+          
+          btn.disabled = true;
+          btn.textContent = 'Mengirim...';
+          
+          try {
+            const response = await fetch(form.action, {
+              method: 'POST',
+              headers: {
+                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                'Accept': 'application/json',
+              },
+              body: formData
+            });
+            
+            if (response.ok) {
+              // Show success message
+              const duration = formData.get('duration_sec');
+              showNotification('Perintah pompa air ' + duration + ' detik berhasil dikirim!', 'success');
+              
+              // Reset button after 2 seconds
+              setTimeout(() => {
+                btn.disabled = false;
+                btn.textContent = 'Aktifkan';
+              }, 2000);
+            } else {
+              throw new Error('Network response was not ok');
+            }
+          } catch (error) {
+            showNotification('Gagal mengirim perintah. Silakan coba lagi.', 'error');
+            btn.disabled = false;
+            btn.textContent = 'Aktifkan';
+          }
+        });
+        
+        // Function to show notification
+        function showNotification(message, type) {
+          const bgColor = type === 'success' ? 'bg-green-50' : 'bg-red-50';
+          const borderColor = type === 'success' ? 'border-green-200' : 'border-red-200';
+          const textColor = type === 'success' ? 'text-green-800' : 'text-red-800';
+          
+          const div = document.createElement('div');
+          div.className = `fixed top-4 right-4 ${bgColor} border ${borderColor} ${textColor} px-6 py-4 rounded-xl shadow-lg z-50 flex items-center`;
+          div.innerHTML = `
+            <svg class="w-5 h-5 mr-3" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+            </svg>
+            <span>${message}</span>
+          `;
+          document.body.appendChild(div);
+          setTimeout(() => div.remove(), 5000);
+        }
+        
+        // Polling untuk auto refresh status dan analytics
+        setInterval(async () => {
+          try {
+            // Fetch latest analytics data
+            const response = await fetch(window.location.href, {
+              headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+              }
+            });
+            
+            if (!response.ok) return;
+            
+            // Check if there's new data by comparing timestamps
+            const hasNewData = await checkNewData();
+            
+            if (hasNewData) {
+              // Reload page untuk refresh semua data
+              location.reload();
+            }
+          } catch (error) {
+            console.error('Error checking for updates:', error);
+          }
+        }, 5000); // Check setiap 5 detik
+        
+        // Check if there's new sensor data
+        async function checkNewData() {
+          @foreach($device->sensors as $s)
+          try {
+            const res{{ $s->id }} = await fetch('{{ url('/api/sensor-latest?sensor_id='.$s->id) }}');
+            if (!res{{ $s->id }}.ok) return false;
+            const j{{ $s->id }} = await res{{ $s->id }}.json();
+            
+            if (j{{ $s->id }} && j{{ $s->id }}.value !== undefined) {
+              const currentLastValue = parseFloat(document.querySelector('#last-{{ $s->id }}').textContent);
+              if (!isNaN(currentLastValue) && currentLastValue !== j{{ $s->id }}.value) {
+                return true; // Ada data baru
+              }
+            }
+          } catch (e) {
+            console.error('Error checking sensor {{ $s->id }}:', e);
+          }
+          @endforeach
+          return false;
+        }
+      </script>
+
     </div>
   </div>
 </x-app-layout>

@@ -30,7 +30,31 @@ class DashboardController extends Controller
             }
         }
         
-        return view('dashboard.index', compact('devices'));
+        // Hitung analytics untuk semua device
+        $analytics = [
+            'temperature' => ['avg' => 0],
+            'humidity' => ['avg' => 0],
+            'soil_moisture' => ['avg' => 0],
+        ];
+        
+        // Ambil rata-rata dari semua sensor terbaru (24 jam terakhir)
+        $tempReadings = \App\Models\SensorReading::whereHas('sensor', function($q) {
+            $q->where('type', 'temp');
+        })->where('recorded_at', '>=', now()->subHours(24))->avg('value');
+        
+        $humReadings = \App\Models\SensorReading::whereHas('sensor', function($q) {
+            $q->where('type', 'hum');
+        })->where('recorded_at', '>=', now()->subHours(24))->avg('value');
+        
+        $soilReadings = \App\Models\SensorReading::whereHas('sensor', function($q) {
+            $q->where('type', 'soil');
+        })->where('recorded_at', '>=', now()->subHours(24))->avg('value');
+        
+        $analytics['temperature']['avg'] = $tempReadings ? round($tempReadings, 1) : '--';
+        $analytics['humidity']['avg'] = $humReadings ? round($humReadings, 1) : '--';
+        $analytics['soil_moisture']['avg'] = $soilReadings ? round($soilReadings, 1) : '--';
+        
+        return view('dashboard.index', compact('devices', 'analytics'));
     }
 
     public function device(Device $device)
