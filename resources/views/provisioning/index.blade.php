@@ -36,15 +36,13 @@
             <td class="p-2">{{ $t->claimed ? 'yes' : 'no' }}</td>
             <td class="p-2">{{ $t->claimed_device_id }}</td>
             <td class="p-2">
-              @if (!$t->claimed)
-                <form method="POST" action="{{ route('provisioning.destroy', $t->id) }}" onsubmit="return confirm('Hapus token ini?');">
-                  @csrf
-                  @method('DELETE')
-                  <button class="px-2 py-1 text-sm text-red-600 border rounded hover:bg-red-50">Hapus</button>
-                </form>
-              @else
-                <span class="text-gray-500 text-sm">-</span>
-              @endif
+              <form method="POST" action="{{ route('provisioning.destroy', $t->id) }}" onsubmit="return confirm('{{ $t->claimed ? 'PERINGATAN: Token ini sudah digunakan oleh device ' . $t->claimed_device_id . '. Menghapus token ini akan menghapus device dan semua data sensor terkait. Yakin ingin melanjutkan?' : 'Hapus token ini?' }}');">
+                @csrf
+                @method('DELETE')
+                <button class="px-2 py-1 text-sm {{ $t->claimed ? 'text-red-700 bg-red-50 border-red-300' : 'text-red-600' }} border rounded hover:bg-red-100">
+                  {{ $t->claimed ? '⚠️ Hapus' : 'Hapus' }}
+                </button>
+              </form>
             </td>
           </tr>
         @endforeach

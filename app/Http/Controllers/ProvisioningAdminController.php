@@ -40,6 +40,7 @@ public function generate(Request $req)
 
     /**
      * Delete a provisioning token by id.
+     * If token is claimed, also delete the associated device and all its data.
      */
     public function destroy($id)
     {
@@ -48,9 +49,22 @@ public function generate(Request $req)
             return redirect('/provisioning')->with('status', 'Token not found.');
         }
 
+        $message = 'Token dihapus: '.$token->token;
+
+        // Jika token sudah claimed, hapus device dan semua data terkait
+        if ($token->claimed && $token->claimed_device_id) {
+            $device = \App\Models\Device::find($token->claimed_device_id);
+            if ($device) {
+                // Laravel akan otomatis cascade delete sensors, readings, commands
+                // karena foreign key constraint di migration
+                $device->delete();
+                $message = 'Token dan device "'.$device->name.'" (ID: '.$device->id.') beserta semua data sensor telah dihapus.';
+            }
+        }
+
         $token->delete();
 
-        return redirect('/provisioning')->with('status', 'Token dihapus: '.$id);
+        return redirect('/provisioning')->with('status', $message);
     }
 
 }
