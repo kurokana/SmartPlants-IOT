@@ -119,4 +119,5 @@
 
     </div>
   </div>
-</x-app-layout>
+<script>setInterval(() => location.reload(), 60000); let lr2 = Date.now(); const i2 = document.createElement('div'); i2.className = 'fixed bottom-4 right-4 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg text-xs z-50'; i2.innerHTML = '<span>Refresh <span id="cd2">60</span>s</span>'; document.body.appendChild(i2); setInterval(() => { const r = 60 - Math.floor((Date.now() - lr2) / 1000); const c = document.getElementById('cd2'); if (c) c.textContent = r > 0 ? r : 60; }, 1000);</script></x-app-layout>
+

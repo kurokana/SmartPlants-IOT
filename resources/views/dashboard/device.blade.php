@@ -277,6 +277,23 @@
         }
       </script>
 
+      <script>
+        // Refresh penuh setiap 2 menit untuk update analytics dan alerts
+        setTimeout(() => location.reload(), 120000);
+        
+        // Indikator
+        const ind3 = document.createElement('div');
+        ind3.className = 'fixed bottom-4 left-4 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg text-xs z-50';
+        ind3.innerHTML = '<span>Full refresh <span id="cd3">120</span>s</span>';
+        document.body.appendChild(ind3);
+        let lr3 = Date.now();
+        setInterval(() => {
+          const r = 120 - Math.floor((Date.now() - lr3) / 1000);
+          const c = document.getElementById('cd3');
+          if (c) c.textContent = r > 0 ? r : 120;
+        }, 1000);
+      </script>
+
     </div>
   </div>
 </x-app-layout>

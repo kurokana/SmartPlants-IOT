@@ -130,4 +130,4 @@
 
         </div>
     </div>
-</x-app-layout>
+    <script>setInterval(() => location.reload(), 30000); let lr = Date.now(); const i = document.createElement('div'); i.className = 'fixed bottom-4 right-4 bg-gray-900 text-white px-4 py-2 rounded-lg shadow-lg text-xs z-50'; i.innerHTML = '<span>Refresh <span id="cd">30</span>s</span>'; document.body.appendChild(i); setInterval(() => { const r = 30 - Math.floor((Date.now() - lr) / 1000); const c = document.getElementById('cd'); if (c) c.textContent = r > 0 ? r : 30; }, 1000);</script></x-app-layout>
