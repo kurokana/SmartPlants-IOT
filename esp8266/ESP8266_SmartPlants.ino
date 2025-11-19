@@ -10,10 +10,15 @@
  * - ESP8266WiFi
  * - ESP8266HTTPClient
  * - ArduinoJson (install via Library Manager)
+ * 
+ * HTTPS Support:
+ * - Set USE_HTTPS to true untuk AlwaysData/production
+ * - Set USE_HTTPS to false untuk local development (HTTP)
  */
 
 #include <ESP8266WiFi.h>
 #include <ESP8266HTTPClient.h>
+#include <WiFiClientSecure.h>  // For HTTPS support
 #include <ArduinoJson.h>
 #include <EEPROM.h>
 
@@ -22,8 +27,14 @@ const char* ssid = "pedal";
 const char* password = "12345689";
 
 // ===== KONFIGURASI SERVER =====
-const char* serverUrl = "http://192.168.137.1:8000"; // Ganti dengan IP/domain server Anda
-// Untuk HTTPS, gunakan WiFiClientSecure dan ganti http:// dengan https://
+// PILIH SALAH SATU:
+// HTTP (local development)
+// const char* serverUrl = "http://192.168.137.1:8000";
+// const bool USE_HTTPS = false;
+
+// HTTPS (AlwaysData production)
+const char* serverUrl = "https://kurokana.alwaysdata.net";
+const bool USE_HTTPS = true;
 
 // ===== PROVISIONING TOKEN =====
 // Dapatkan token dari web dashboard (http://server/provisioning -> klik Generate)
@@ -92,13 +103,19 @@ void clearCredentials() {
 bool doProvisioning() {
   Serial.println("🔧 Starting provisioning...");
   
-  WiFiClient client;
   HTTPClient http;
-  
   String chipId = String(ESP.getChipId());
   String url = String(serverUrl) + "/api/provision/claim";
   
-  http.begin(client, url);
+  // Create appropriate client based on HTTPS setting
+  if (USE_HTTPS) {
+    WiFiClientSecure client;
+    client.setInsecure();  // Skip SSL certificate verification
+    http.begin(client, url);
+  } else {
+    WiFiClient client;
+    http.begin(client, url);
+  }
   http.addHeader("Content-Type", "application/json");
   
   // Buat JSON body
@@ -156,12 +173,18 @@ bool doProvisioning() {
 
 // ===== KIRIM DATA SENSOR =====
 bool sendSensorData(float soil, float temp, float hum, float r, float g, float b) {
-  WiFiClient client;
   HTTPClient http;
-  
   String url = String(serverUrl) + "/api/ingest";
   
-  http.begin(client, url);
+  // Create appropriate client based on HTTPS setting
+  if (USE_HTTPS) {
+    WiFiClientSecure client;
+    client.setInsecure();  // Skip SSL certificate verification
+    http.begin(client, url);
+  } else {
+    WiFiClient client;
+    http.begin(client, url);
+  }
   http.addHeader("Content-Type", "application/json");
   http.addHeader("X-Device-Id", String(creds.deviceId));
   http.addHeader("X-Api-Key", String(creds.apiKey));

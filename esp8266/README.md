@@ -9,9 +9,26 @@ Folder ini berisi firmware Arduino untuk ESP8266 NodeMCU yang digunakan dalam si
 - ✅ Pembacaan sensor (DHT22, Soil Moisture, TCS3200)
 - ✅ Kontrol relay (water pump)
 - ✅ Koneksi WiFi dengan auto-reconnect
-- ✅ HTTP client untuk kirim data ke Laravel API
+- ✅ HTTP/HTTPS client untuk kirim data ke Laravel API
 - ✅ Command polling dari server
 - ✅ Status LED indikator
+- ✅ **HTTPS Support** untuk AlwaysData/production
+- ✅ **HTTP Support** untuk local development
+
+**Konfigurasi HTTPS (AlwaysData):**
+```cpp
+const char* serverUrl = "https://kurokana.alwaysdata.net";
+const bool USE_HTTPS = true;
+```
+
+**Konfigurasi HTTP (Local):**
+```cpp
+const char* serverUrl = "http://192.168.1.100:8000";
+const bool USE_HTTPS = false;
+```
+
+### ESP8266_SmartPlants_HTTPS.ino
+Versi standalone khusus HTTPS (tidak perlu toggle USE_HTTPS).
 
 ### esp8266_full_automation.ino
 Versi dengan automasi lokal tambahan (opsional).
@@ -50,3 +67,13 @@ Lihat dokumentasi lengkap di `docs/ESP8266_README.md`
 - Cek WiFi credentials
 - Cek API endpoint URL
 - Monitor Serial untuk debug log (115200 baud)
+
+**Error code -5 (HTTPS):**
+- Gunakan `WiFiClientSecure` dengan `setInsecure()`
+- Set `USE_HTTPS = true` untuk HTTPS
+- Pastikan URL dimulai dengan `https://`
+
+**Error code -1 (Connection timeout):**
+- Cek firewall server
+- Pastikan server accessible dari ESP8266
+- Test ping ke server dari network yang sama
