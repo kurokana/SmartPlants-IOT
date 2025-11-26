@@ -12,7 +12,7 @@ class ProvisioningController extends Controller
     {
         $data = $req->validate([
             'token' => 'required|string',
-            'device_id' => 'required|string',
+            'device_id' => 'required|string', // Raw chip ID from ESP8266
             'name' => 'nullable|string',
             'location' => 'nullable|string',
         ]);
@@ -41,13 +41,24 @@ class ProvisioningController extends Controller
             return response()->json(['message' => 'Token expired'], 410);
         }
 
-        // Check if device already exists
-        $device = \App\Models\Device::find($data['device_id']);
+        // Generate unique device ID per user: user_{user_id}_chip_{chip_id}
+        // This ensures same ESP8266 can be used by different users without conflicts
+        $chipId = $data['device_id']; // Raw chip ID from ESP8266 (e.g., "62563")
+        $uniqueDeviceId = "user_{$pt->user_id}_chip_{$chipId}";
+        
+        \Log::info('Processing provisioning request', [
+            'raw_chip_id' => $chipId,
+            'unique_device_id' => $uniqueDeviceId,
+            'user_id' => $pt->user_id,
+        ]);
+
+        // Check if device already exists with this unique ID
+        $device = \App\Models\Device::find($uniqueDeviceId);
         
         if (!$device) {
-            // NEW DEVICE: Create and assign to token owner
+            // NEW DEVICE: Create with unique ID per user
             $device = \App\Models\Device::create([
-                'id' => $data['device_id'],
+                'id' => $uniqueDeviceId,
                 'name' => $data['name'] ?? $pt->name_hint ?? 'ESP8266 SmartPlant',
                 'location' => $data['location'] ?? $pt->location_hint ?? 'Home',
                 'api_key' => Str::random(40),
@@ -72,7 +83,8 @@ class ProvisioningController extends Controller
                 );
             }
 
-            \Log::info('New device provisioned', [
+            \Log::info('New device provisioned with unique ID', [
+                'chip_id' => $chipId,
                 'device_id' => $device->id,
                 'user_id' => $pt->user_id,
                 'user_email' => $pt->user->email ?? 'N/A',
@@ -80,59 +92,25 @@ class ProvisioningController extends Controller
             ]);
             
         } else {
-            // EXISTING DEVICE: Strict ownership validation
+            // EXISTING DEVICE: This user already provisioned this chip before
+            // Re-provision: Generate new API key for security
             
-            // Case 1: Device already owned by different user - BLOCK
-            if ($device->user_id !== null && $device->user_id !== $pt->user_id) {
-                \Log::error('Provisioning blocked: Device ownership conflict', [
-                    'device_id' => $device->id,
-                    'current_owner_id' => $device->user_id,
-                    'attempted_owner_id' => $pt->user_id,
-                    'token' => $pt->token,
-                ]);
-                
-                return response()->json([
-                    'message' => 'Device already registered to another user',
-                    'error' => 'DEVICE_OWNERSHIP_CONFLICT',
-                    'hint' => 'This device is already claimed. To transfer ownership, clear device EEPROM and provision with a new token.',
-                ], 409);
-            }
+            $oldApiKey = $device->api_key;
+            $device->update([
+                'api_key' => Str::random(40),
+                'name' => $data['name'] ?? $device->name,
+                'location' => $data['location'] ?? $device->location,
+                'status' => 'offline',
+            ]);
             
-            // Case 2: Device owned by same user - RE-PROVISION (renew API key)
-            if ($device->user_id === $pt->user_id) {
-                $oldApiKey = $device->api_key;
-                $device->update([
-                    'api_key' => Str::random(40),
-                    'name' => $data['name'] ?? $device->name,
-                    'location' => $data['location'] ?? $device->location,
-                    'status' => 'offline',
-                ]);
-                
-                \Log::info('Device re-provisioned by same user', [
-                    'device_id' => $device->id,
-                    'user_id' => $pt->user_id,
-                    'old_api_key' => substr($oldApiKey, 0, 8) . '...',
-                    'new_api_key' => substr($device->api_key, 0, 8) . '...',
-                    'token' => $pt->token,
-                ]);
-            }
-            
-            // Case 3: Device exists but no owner (orphaned) - CLAIM
-            if ($device->user_id === null) {
-                $device->update([
-                    'user_id' => $pt->user_id,
-                    'api_key' => Str::random(40),
-                    'name' => $data['name'] ?? $device->name,
-                    'location' => $data['location'] ?? $device->location,
-                    'status' => 'offline',
-                ]);
-                
-                \Log::info('Orphaned device claimed', [
-                    'device_id' => $device->id,
-                    'new_user_id' => $pt->user_id,
-                    'token' => $pt->token,
-                ]);
-            }
+            \Log::info('Device re-provisioned with new API key', [
+                'chip_id' => $chipId,
+                'device_id' => $device->id,
+                'user_id' => $pt->user_id,
+                'old_api_key' => substr($oldApiKey, 0, 8) . '...',
+                'new_api_key' => substr($device->api_key, 0, 8) . '...',
+                'token' => $pt->token,
+            ]);
         }
 
         // Mark token as claimed

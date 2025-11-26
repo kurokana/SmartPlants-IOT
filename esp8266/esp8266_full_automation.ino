@@ -30,7 +30,7 @@ const char* provisionToken = "ub78Nc5t9gt4iYWJDF922gtRqM4ER7lVN7BP";
 // ===== EEPROM Credentials =====
 struct Credentials {
   char magic[4];
-  char deviceId[32];
+  char deviceId[64];  // Increased size for "user_X_chip_Y" format
   char apiKey[48];
   bool isValid;
 };
@@ -86,10 +86,13 @@ bool doProvisioning() {
 
   DynamicJsonDocument doc(256);
   doc["token"] = provisionToken;
-  doc["device_id"] = String(ESP.getChipId());
+  doc["device_id"] = String(ESP.getChipId());  // Send raw chip ID
   doc["name"] = "ESP8266 SmartPlant";
   doc["location"] = "Home";
 
+  // Server will generate unique device ID: user_{user_id}_chip_{chip_id}
+  // This allows same ESP8266 to be used by different users without conflicts
+  
   String body;
   serializeJson(doc, body);
   int code = http.POST(body);
@@ -105,7 +108,11 @@ bool doProvisioning() {
     String id = resDoc["device_id"].as<String>();
     String key = resDoc["api_key"].as<String>();
 
-    id.toCharArray(creds.deviceId, 32);
+    Serial.println("📥 Received from server:");
+    Serial.println("   Device ID: " + id);
+    Serial.println("   API Key: " + key.substring(0, 8) + "...");
+
+    id.toCharArray(creds.deviceId, 64);  // Increased buffer size
     key.toCharArray(creds.apiKey, 48);
     saveCredentials();
     http.end();
