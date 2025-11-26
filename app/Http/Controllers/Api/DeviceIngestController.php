@@ -24,9 +24,14 @@ class DeviceIngestController extends Controller
             'readings' => 'required|array|min:1',
             'readings.*.type' => 'required|in:soil,temp,hum,color_r,color_g,color_b',
             'readings.*.value' => 'required|numeric',
+            // Accept optional timestamp from ESP8266. If provided, must be ISO 8601 format.
+            // Validation interprets incoming timestamp in app timezone (Asia/Jakarta).
+            // If not provided, server's current time (now() in Asia/Jakarta) will be used.
             'timestamp' => 'nullable|date|after_or_equal:-1 hour', // Max 1 hour old
         ]);
 
+        // Fallback to server's current time in Asia/Jakarta if ESP8266 doesn't send timestamp
+        // This ensures all sensor data is recorded with WIB (UTC+7) timestamps
         $timestamp = $validated['timestamp'] ?? now();
         
         // Get existing sensors efficiently
