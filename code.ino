@@ -1,31 +1,45 @@
-/*
- * SmartPlants ESP8266 - Dummy Data (Auto-Provisioning Version)
- * Updated by: Gemini Analysis
- */
-
 #include <ESP8266WiFi.h>
 #include <ESP8266HTTPClient.h>
+#include <WiFiClientSecure.h>
 #include <ArduinoJson.h>
 #include <EEPROM.h>
+#include <DHT.h>
 
-// ===== KONFIGURASI USER (WAJIB DIGANTI) =====
-const char* ssid = "NASA";
-const char* password = "outerspace";
+// ===== PIN KONFIGURASI =====
+#define DHTPIN D2
+#define DHTTYPE DHT22
+#define SOIL_PIN A0
+#define RELAY_PIN D4  // Pin untuk relay pompa air
 
-// Ganti dengan IP komputermu (jangan localhost)
-const char* serverUrl = "http://192.168.43.116:8000"; 
+// TCS3200 pins
+#define S0 D5
+#define S1 D6
+#define S2 D7
+#define S3 D8
+#define OUT D1
 
-// ⚠️ PENTING: Masukkan Token BARU dari Web Dashboard setiap kali flash ulang/reset DB
-const char* provisionToken = "n3jPaLQyHXLstXrrFirQEHtq8IJiNA97uME1"; 
+DHT dht(DHTPIN, DHTTYPE);
+
+// ===== WiFi & Server =====
+const char* ssid = "pedal";
+const char* password = "12345689";
+const char* serverUrl = "https://kurokana.alwaysdata.net";  // HTTPS, no trailing slash!
+const char* provisionToken = "0NwbV2UU8bLUyVtPV8657gjriuwYwdNPVVTg";
 
 // ===== EEPROM Credentials =====
 struct Credentials {
-  char magic[4];      // Penanda unik "SPLT"
+  char magic[4];
   char deviceId[32];
   char apiKey[48];
   bool isValid;
 };
 Credentials creds;
+
+// ===== Timing =====
+unsigned long lastSensorRead = 0;
+unsigned long lastCommandCheck = 0;
+const unsigned long SENSOR_INTERVAL = 30000;  // 30 seconds
+const unsigned long COMMAND_INTERVAL = 10000; // 10 seconds
 
 // ===== Helper EEPROM =====
 void saveCredentials() {
@@ -35,19 +49,7 @@ void saveCredentials() {
   EEPROM.put(0, creds);
   EEPROM.commit();
   EEPROM.end();
-  Serial.println("💾 Credentials saved to EEPROM");
-}
-
-// FUNGSI BARU: Menghapus kredensial jika ditolak server
-void clearCredentials() {
-  EEPROM.begin(512);
-  // Kita hanya perlu merusak 'magic' bytes atau set isValid ke false
-  creds.isValid = false;
-  creds.magic[0] = 0; 
-  EEPROM.put(0, creds);
-  EEPROM.commit();
-  EEPROM.end();
-  Serial.println("🗑️ Credentials CLEARED from EEPROM");
+  Serial.println("✅ Credentials saved to EEPROM");
 }
 
 void loadCredentials() {
@@ -59,53 +61,45 @@ void loadCredentials() {
     Serial.println("✅ Credentials loaded from EEPROM");
   } else {
     creds.isValid = false;
-    Serial.println("⚠️ No valid credentials found");
+    Serial.println("⚠ No valid credentials found");
   }
 }
 
 // ===== Provisioning =====
 bool doProvisioning() {
-  WiFiClient client;
+  WiFiClientSecure client;
+  client.setInsecure();  // Skip SSL certificate verification
+  
   HTTPClient http;
   String url = String(serverUrl) + "/api/provision/claim";
 
-  Serial.println("🔧 Starting Provisioning...");
-  Serial.println("Target: " + url);
-
-  client.setTimeout(10000);
   http.begin(client, url);
   http.addHeader("Content-Type", "application/json");
-  http.addHeader("Accept", "application/json"); // Good practice
 
   DynamicJsonDocument doc(256);
   doc["token"] = provisionToken;
-  doc["device_id"] = String(ESP.getChipId()); // ID Hardware Unik
+  doc["device_id"] = String(ESP.getChipId());
   doc["name"] = "ESP8266 SmartPlant";
-  doc["location"] = "Garden";
+  doc["location"] = "Home";
 
   String body;
   serializeJson(doc, body);
-  
   int code = http.POST(body);
 
   if (code == 200) {
     String response = http.getString();
     DynamicJsonDocument resDoc(512);
-    
     if (deserializeJson(resDoc, response)) {
       Serial.println("❌ JSON parse error!");
       return false;
     }
 
-    // Simpan kredensial baru
     String id = resDoc["device_id"].as<String>();
     String key = resDoc["api_key"].as<String>();
 
     id.toCharArray(creds.deviceId, 32);
     key.toCharArray(creds.apiKey, 48);
     saveCredentials();
-    
-    Serial.println("🎉 Provisioning SUCCESS!");
     http.end();
     return true;
   } else {
@@ -116,24 +110,48 @@ bool doProvisioning() {
   }
 }
 
-// ===== Generate Dummy Data =====
-#include <stdlib.h>
-
-float randomFloat(float min, float max) {
-  return min + ((float)rand() / RAND_MAX) * (max - min);
+// ===== Baca Sensor =====
+float readSoilMoisture() {
+  int raw = analogRead(SOIL_PIN);
+  float percent = map(raw, 1023, 300, 0, 100);
+  if (percent < 0) percent = 0;
+  if (percent > 100) percent = 100;
+  return percent;
 }
 
-// ===== Kirim Data (Dengan Auto-Reset) =====
+void setColorMode(int s2Val, int s3Val) {
+  digitalWrite(S2, s2Val);
+  digitalWrite(S3, s3Val);
+}
+
+int readColorFrequency() {
+  return pulseIn(OUT, LOW);
+}
+
+void readColorRGB(float &r, float &g, float &b) {
+  setColorMode(LOW, LOW);
+  int red = readColorFrequency();
+  delay(100);
+  setColorMode(HIGH, HIGH);
+  int green = readColorFrequency();
+  delay(100);
+  setColorMode(LOW, HIGH);
+  int blue = readColorFrequency();
+
+  r = 255.0 * (1.0 - (float)red / 1000.0);
+  g = 255.0 * (1.0 - (float)green / 1000.0);
+  b = 255.0 * (1.0 - (float)blue / 1000.0);
+}
+
+// ===== Kirim Data =====
 bool sendSensorData(float soil, float temp, float hum, float r, float g, float b) {
-  WiFiClient client;
+  WiFiClientSecure client;
+  client.setInsecure();  // Skip SSL certificate verification
+  
   HTTPClient http;
   String url = String(serverUrl) + "/api/ingest";
 
-  // Setup timeouts agar tidak error -11
-  client.setTimeout(15000);
   http.begin(client, url);
-  http.setTimeout(15000);
-  
   http.addHeader("Content-Type", "application/json");
   http.addHeader("X-Device-Id", String(creds.deviceId));
   http.addHeader("X-Api-Key", String(creds.apiKey));
@@ -141,108 +159,197 @@ bool sendSensorData(float soil, float temp, float hum, float r, float g, float b
   DynamicJsonDocument doc(512);
   JsonArray readings = doc.createNestedArray("readings");
 
-  // Helper lambda
-  auto addReading = [&](const char* type, float val) {
-      JsonObject obj = readings.createNestedObject();
-      obj["type"] = type;
-      obj["value"] = val;
-  };
-
-  addReading("soil", soil);
-  addReading("temp", temp);
-  addReading("hum", hum);
-  addReading("color_r", r);
-  addReading("color_g", g);
-  addReading("color_b", b);
+  JsonObject j1 = readings.createNestedObject(); j1["type"] = "soil"; j1["value"] = soil;
+  JsonObject j2 = readings.createNestedObject(); j2["type"] = "temp"; j2["value"] = temp;
+  JsonObject j3 = readings.createNestedObject(); j3["type"] = "hum";  j3["value"] = hum;
+  JsonObject j4 = readings.createNestedObject(); j4["type"] = "color_r"; j4["value"] = r;
+  JsonObject j5 = readings.createNestedObject(); j5["type"] = "color_g"; j5["value"] = g;
+  JsonObject j6 = readings.createNestedObject(); j6["type"] = "color_b"; j6["value"] = b;
 
   String body;
   serializeJson(doc, body);
-  Serial.println("📤 Sending Data...");
+  Serial.println("📤 Sending: " + body);
 
   int code = http.POST(body);
-
-  bool success = false;
   if (code == 200) {
-    Serial.println("✅ Data sent successfully! (200 OK)");
-    success = true;
-  } 
-  else if (code == 401) {
-    // === SELF HEALING LOGIC ===
-    Serial.println("❌ Error 401: Unauthorized / Invalid Credentials.");
-    Serial.println("🔄 System will reset credentials and restart to re-provision.");
-    
-    clearCredentials(); // Hapus API Key lama
-    delay(1000);
-    ESP.restart();      // Restart untuk masuk mode provisioning
+    Serial.println("✅ Data sent successfully!");
+    http.end();
+    return true;
+  } else {
+    Serial.printf("❌ HTTP failed (code %d)\n", code);
+    http.end();
+    return false;
   }
-  else {
-    Serial.printf("❌ HTTP Failed. Error Code: %d\n", code);
-    if (code == -11) Serial.println("⚠️ Timeout detected.");
-    String payload = http.getString();
-    if (payload.length() > 0) Serial.println("Server says: " + payload);
-  }
+}
 
+// ===== COMMAND CONTROL =====
+void executeWaterOn(int durationSec) {
+  Serial.printf("💧 Water ON for %d seconds\n", durationSec);
+  
+  // Safety: Max 60 seconds
+  if (durationSec > 60) durationSec = 60;
+  if (durationSec < 1) durationSec = 1;
+  
+  digitalWrite(RELAY_PIN, LOW);  // Relay aktif LOW (normally HIGH)
+  delay(durationSec * 1000);
+  digitalWrite(RELAY_PIN, HIGH); // Matikan relay
+  
+  Serial.println("✅ Water OFF");
+}
+
+void checkCommands() {
+  Serial.println("🔍 Checking for commands...");
+  
+  WiFiClientSecure client;
+  client.setInsecure();  // Skip SSL certificate verification
+  
+  HTTPClient http;
+  String url = String(serverUrl) + "/api/commands/next";
+
+  http.begin(client, url);
+  http.addHeader("X-Device-Id", String(creds.deviceId));
+  http.addHeader("X-Api-Key", String(creds.apiKey));
+
+  int code = http.GET();
+  Serial.printf("📡 Command check response: %d\n", code);
+  
+  if (code == 200) {
+    String response = http.getString();
+    Serial.println("📥 Response: " + response);
+    
+    DynamicJsonDocument doc(512);
+    DeserializationError error = deserializeJson(doc, response);
+    
+    if (error) {
+      Serial.println("❌ JSON parse error: " + String(error.c_str()));
+      http.end();
+      return;
+    }
+    
+    if (doc["command"].isNull()) {
+      Serial.println("⏸ No pending commands");
+      http.end();
+      return;
+    }
+
+    int cmdId = doc["id"];
+    String command = doc["command"].as<String>();
+    JsonObject params = doc["params"];
+
+    Serial.printf("📥 Command received: %s (ID: %d)\n", command.c_str(), cmdId);
+
+    if (command == "water_on") {
+      int duration = params["duration_sec"] | 5; // Default 5 detik
+      Serial.printf("💧 Executing water_on for %d seconds...\n", duration);
+      executeWaterOn(duration);
+      
+      // Send ACK
+      http.end();
+      HTTPClient httpAck;
+      String ackUrl = String(serverUrl) + "/api/commands/" + String(cmdId) + "/ack";
+      Serial.println("📤 Sending ACK to: " + ackUrl);
+      
+      httpAck.begin(client, ackUrl);
+      httpAck.addHeader("X-Device-Id", String(creds.deviceId));
+      httpAck.addHeader("X-Api-Key", String(creds.apiKey));
+      int ackCode = httpAck.POST("");
+      Serial.printf("ACK Response: %d\n", ackCode);
+      httpAck.end();
+      
+      Serial.println("✅ Command ACK sent");
+    } else {
+      Serial.println("⚠ Unknown command: " + command);
+    }
+  } else {
+    Serial.printf("❌ Command check failed (code %d)\n", code);
+  }
+  
   http.end();
-  return success;
 }
 
 // ===== Setup =====
 void setup() {
   Serial.begin(115200);
-  delay(1000); // Beri waktu serial monitor
-  Serial.println("\n\n=== SmartPlants (Auto-Prov) ===");
-  srand(millis());
+  delay(100);
+  Serial.println("\n=== SmartPlants (FULL AUTOMATION MODE) ===");
 
+  // Setup pins
+  pinMode(RELAY_PIN, OUTPUT);
+  digitalWrite(RELAY_PIN, HIGH); // Relay OFF (aktif LOW)
+
+  pinMode(S0, OUTPUT); pinMode(S1, OUTPUT);
+  pinMode(S2, OUTPUT); pinMode(S3, OUTPUT);
+  pinMode(OUT, INPUT);
+
+  digitalWrite(S0, HIGH);
+  digitalWrite(S1, LOW);
+
+  dht.begin();
+
+  // WiFi connection
   WiFi.begin(ssid, password);
   Serial.print("Connecting to WiFi");
-  
   int attempt = 0;
-  while (WiFi.status() != WL_CONNECTED && attempt < 30) {
+  while (WiFi.status() != WL_CONNECTED && attempt < 20) {
     delay(500); Serial.print(".");
     attempt++;
   }
 
   if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("\n❌ WiFi Failed. Check SSID/Password.");
-    delay(5000);
+    Serial.println("\n❌ WiFi Failed. Restarting...");
     ESP.restart();
   }
   Serial.println("\n✅ WiFi Connected!");
-  Serial.print("IP: "); Serial.println(WiFi.localIP());
+  Serial.println(WiFi.localIP());
 
+  // Provisioning
   loadCredentials();
-
-  // Jika kredensial tidak valid (atau baru di-clear), lakukan provisioning
   if (!creds.isValid) {
-    Serial.println("⚙️ No valid credentials. Starting Provisioning sequence...");
-    
-    // Loop sampai berhasil provisioning
-    while (!doProvisioning()) {
-      Serial.println("❌ Provisioning failed. Retrying in 10s...");
-      Serial.println("⚠️ TIP: Make sure 'provisionToken' in code matches Web Dashboard!");
-      delay(10000);
+    Serial.println("⚙ No credentials found. Provisioning...");
+    if (!doProvisioning()) {
+      Serial.println("❌ Provisioning failed. Restarting...");
+      delay(5000);
+      ESP.restart();
     }
   }
 
-  Serial.println("✅ Device Authenticated & Ready!");
+  Serial.println("✅ Device ready!");
+  Serial.println("🔁 Automation mode enabled");
 }
 
 // ===== Loop =====
 void loop() {
-  // Data Dummy
-  float soil = randomFloat(30, 80);
-  float temp = randomFloat(25, 32);
-  float hum  = randomFloat(50, 90);
-  float r    = randomFloat(0, 255);
-  float g    = randomFloat(0, 255);
-  float b    = randomFloat(0, 255);
+  unsigned long now = millis();
 
-  Serial.println("\n📊 Sensor Dummy Data:");
-  Serial.printf("Soil: %.2f%%\n", soil);
-  
-  sendSensorData(soil, temp, hum, r, g, b);
+  // Read sensors every 30 seconds
+  if (now - lastSensorRead >= SENSOR_INTERVAL) {
+    lastSensorRead = now;
+    
+    float soil = readSoilMoisture();
+    float temp = dht.readTemperature();
+    float hum = dht.readHumidity();
+    float r, g, b;
+    readColorRGB(r, g, b);
 
-  int sleepMs = 10000; // Kirim tiap 10 detik
-  Serial.printf("⏳ Next send in %d ms...\n", sleepMs);
-  delay(sleepMs);
+    if (isnan(temp) || isnan(hum)) {
+      Serial.println("⚠ DHT22 read failed, skipping...");
+      return;
+    }
+
+    Serial.println("\n📊 Sensor Data:");
+    Serial.printf("Soil: %.2f%%\n", soil);
+    Serial.printf("Temp: %.2f°C\n", temp);
+    Serial.printf("Hum : %.2f%%\n", hum);
+    Serial.printf("RGB : (%.0f, %.0f, %.0f)\n", r, g, b);
+
+    sendSensorData(soil, temp, hum, r, g, b);
+  }
+
+  // Check for commands every 10 seconds
+  if (now - lastCommandCheck >= COMMAND_INTERVAL) {
+    lastCommandCheck = now;
+    checkCommands();
+  }
+
+  delay(100); // Small delay to prevent watchdog reset
 }
